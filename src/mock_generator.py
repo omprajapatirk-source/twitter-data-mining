@@ -6,6 +6,7 @@ hashtags, mentions, metrics, and timestamps for testing and offline data mining.
 
 import json
 import random
+import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -65,6 +66,9 @@ TWEET_TEMPLATES = [
     ("Pre-game press conference is live now discussing tactical lineups. #Sports #News", "neutral")
 ]
 
+# In-memory storage cache for serverless environments
+MEMORY_TWEETS_CACHE = []
+
 def generate_mock_tweets(count: int = 150) -> list[dict]:
     """Generates a list of realistic synthetic tweet dictionaries."""
     tweets = []
@@ -75,11 +79,9 @@ def generate_mock_tweets(count: int = 150) -> list[dict]:
         user = random.choice(USERS)
         loc = random.choice(LOCATIONS)
         
-        # Add random timestamp progression
         tweet_time = base_time + timedelta(minutes=random.randint(5, 48 * 60))
         time_str = tweet_time.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        # Variations in engagement metrics
         retweets = random.randint(0, 450)
         likes = random.randint(retweets, retweets * 8 + 5)
         replies = random.randint(0, retweets // 2 + 3)
@@ -109,18 +111,25 @@ def generate_mock_tweets(count: int = 150) -> list[dict]:
         }
         tweets.append(tweet)
 
-    # Sort chronologically
     tweets.sort(key=lambda t: t["created_at"])
     return tweets
 
 def save_mock_dataset(filepath: str | Path, count: int = 150) -> list[dict]:
-    """Generates and writes mock tweets to a JSONL file."""
-    path = Path(filepath)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    """Generates and writes mock tweets to a JSONL file with memory/tempdir fallbacks."""
+    global MEMORY_TWEETS_CACHE
     tweets = generate_mock_tweets(count)
+    MEMORY_TWEETS_CACHE = tweets
 
-    with open(path, "w", encoding="utf-8") as f:
-        for tweet in tweets:
-            f.write(json.dumps(tweet, ensure_ascii=False) + "\n")
+    paths_to_try = [Path(filepath), Path(tempfile.gettempdir()) / "stream_data.jsonl"]
+    
+    for path in paths_to_try:
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                for tweet in tweets:
+                    f.write(json.dumps(tweet, ensure_ascii=False) + "\n")
+            break
+        except (OSError, PermissionError):
+            continue
 
     return tweets

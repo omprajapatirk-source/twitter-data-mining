@@ -5,6 +5,7 @@ Supports live Twitter API v2 (Tweepy), keyword searches, and automatic mock stre
 """
 
 import json
+import tempfile
 from pathlib import Path
 from typing import Optional
 import tweepy
@@ -17,7 +18,7 @@ from .config import (
     TWITTER_ACCESS_TOKEN_SECRET,
     DEFAULT_STREAM_FILE
 )
-from .mock_generator import generate_mock_tweets, save_mock_dataset
+from .mock_generator import generate_mock_tweets, save_mock_dataset, MEMORY_TWEETS_CACHE
 
 class TwitterCollector:
     """Handles data collection from Twitter API v2 or local simulated streams."""
@@ -47,8 +48,7 @@ class TwitterCollector:
         Fetches recent tweets using Twitter API v2 search endpoint.
         Falls back to generating realistic mock data if no valid API credentials are found.
         """
-        output_file = Path(output_file or DEFAULT_STREAM_FILE)
-        output_file.parent.mkdir(parents=True, exist_ok=True)
+        target_path = Path(output_file or DEFAULT_STREAM_FILE)
 
         if self.client:
             try:
@@ -61,22 +61,18 @@ class TwitterCollector:
                     user_fields=["username", "name", "location", "verified", "public_metrics"]
                 )
 
-                if not response.data:
-                    print("[Collector] No tweets returned by Twitter API.")
-                    return []
+                if response.data:
+                    users_lookup = {}
+                    if response.includes and "users" in response.includes:
+                        for u in response.includes["users"]:
+                            users_lookup[u.id] = {
+                                "username": u.username,
+                                "name": u.name,
+                                "verified": getattr(u, "verified", False),
+                                "location": getattr(u, "location", "Unknown")
+                            }
 
-                users_lookup = {}
-                if response.includes and "users" in response.includes:
-                    for u in response.includes["users"]:
-                        users_lookup[u.id] = {
-                            "username": u.username,
-                            "name": u.name,
-                            "verified": getattr(u, "verified", False),
-                            "location": getattr(u, "location", "Unknown")
-                        }
-
-                collected = []
-                with open(output_file, "a", encoding="utf-8") as f:
+                    collected = []
                     for tweet in response.data:
                         user_info = users_lookup.get(tweet.author_id, {
                             "username": "unknown",
@@ -94,36 +90,51 @@ class TwitterCollector:
                             "public_metrics": tweet.public_metrics or {},
                             "lang": getattr(tweet, "lang", "en")
                         }
-                        f.write(json.dumps(tweet_dict, ensure_ascii=False) + "\n")
                         collected.append(tweet_dict)
 
-                print(f"[Collector] Successfully collected and saved {len(collected)} tweets.")
-                return collected
+                    # Try to save to file
+                    try:
+                        target_path.parent.mkdir(parents=True, exist_ok=True)
+                        with open(target_path, "a", encoding="utf-8") as f:
+                            for t in collected:
+                                f.write(json.dumps(t, ensure_ascii=False) + "\n")
+                    except (OSError, PermissionError):
+                        pass
+
+                    return collected
 
             except Exception as e:
                 print(f"[Collector Error] Twitter API call failed: {e}")
-                print("[Collector] Falling back to simulated stream generator.")
 
-        # Fallback mode
-        print("[Collector] Operating in simulation/offline mode (Generating realistic tweets).")
-        return save_mock_dataset(output_file, count=max_results)
+        # Fallback to mock generator
+        return save_mock_dataset(target_path, count=max_results)
 
     @staticmethod
     def load_tweets(filepath: Optional[Path] = None) -> list[dict]:
-        """Loads and parses tweets from a JSONL file."""
-        filepath = Path(filepath or DEFAULT_STREAM_FILE)
-        if not filepath.exists():
-            # If default file doesn't exist yet, generate initial sample dataset
-            print(f"[Storage] {filepath} not found. Generating initial dataset...")
-            return save_mock_dataset(filepath, count=100)
+        """Loads and parses tweets from files or memory."""
+        global MEMORY_TWEETS_CACHE
+        paths_to_check = [
+            Path(filepath) if filepath else None,
+            DEFAULT_STREAM_FILE,
+            Path(tempfile.gettempdir()) / "stream_data.jsonl"
+        ]
 
-        tweets = []
-        with open(filepath, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line:
-                    try:
-                        tweets.append(json.loads(line))
-                    except json.JSONDecodeError:
-                        continue
-        return tweets
+        for p in paths_to_check:
+            if p and p.exists():
+                tweets = []
+                try:
+                    with open(p, "r", encoding="utf-8") as f:
+                        for line in f:
+                            line = line.strip()
+                            if line:
+                                tweets.append(json.loads(line))
+                    if tweets:
+                        return tweets
+                except Exception:
+                    continue
+
+        if MEMORY_TWEETS_CACHE:
+            return MEMORY_TWEETS_CACHE
+
+        # Generate on the fly
+        return save_mock_dataset(DEFAULT_STREAM_FILE, count=80)
