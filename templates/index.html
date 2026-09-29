@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Twitter Data Mining & NLP Intelligence Suite</title>
+  <meta name="description" content="End-to-End Social Media Text Mining & NLP Analytics Platform based on Marco Bonzanini's Architecture">
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <!-- Leaflet CSS for Geo Maps -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <!-- Vis.js Network for Co-occurrence Graph -->
+  <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  
+  <!-- Leaflet.js -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <!-- Header Bar -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <div class="brand-icon">
+          <i class="fa-brands fa-x-twitter"></i>
+        </div>
+        <div class="brand-text">
+          <h1>Twitter / X Data Mining Suite</h1>
+          <p class="subtitle">NLP Pipeline & Term Co-occurrence Engine &bull; Marco Bonzanini Architecture</p>
+        </div>
+      </div>
+      
+      <div class="header-actions">
+        <button id="btn-refresh" class="btn btn-secondary" title="Reload Analysis">
+          <i class="fa-solid fa-rotate"></i> Refresh
+        </button>
+        <button id="btn-open-ingest" class="btn btn-primary">
+          <i class="fa-solid fa-bolt"></i> Ingest Tweets
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Layout -->
+  <main class="main-container">
+    
+    <!-- Top Stats Cards -->
+    <section class="stats-grid">
+      <div class="stat-card" id="card-total-tweets">
+        <div class="stat-icon icon-blue"><i class="fa-solid fa-comments"></i></div>
+        <div class="stat-info">
+          <span class="stat-label">Total Tweets</span>
+          <h3 class="stat-value" id="stat-total">--</h3>
+          <span class="stat-detail"><i class="fa-solid fa-database"></i> Ingested Stream</span>
+        </div>
+      </div>
+
+      <div class="stat-card" id="card-avg-sentiment">
+        <div class="stat-icon icon-emerald"><i class="fa-solid fa-heart-pulse"></i></div>
+        <div class="stat-info">
+          <span class="stat-label">Avg Sentiment Polarity</span>
+          <h3 class="stat-value" id="stat-polarity">--</h3>
+          <span class="stat-detail" id="stat-polarity-label">Neutral</span>
+        </div>
+      </div>
+
+      <div class="stat-card" id="card-top-hashtag">
+        <div class="stat-icon icon-purple"><i class="fa-solid fa-hashtag"></i></div>
+        <div class="stat-info">
+          <span class="stat-label">Top Trending Tag</span>
+          <h3 class="stat-value" id="stat-hashtag">--</h3>
+          <span class="stat-detail" id="stat-hashtag-count">0 occurrences</span>
+        </div>
+      </div>
+
+      <div class="stat-card" id="card-unique-terms">
+        <div class="stat-icon icon-amber"><i class="fa-solid fa-brain"></i></div>
+        <div class="stat-info">
+          <span class="stat-label">Vocabulary Breadth</span>
+          <h3 class="stat-value" id="stat-vocab">--</h3>
+          <span class="stat-detail">Processed Unigrams</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs" role="tablist">
+      <button class="tab-btn active" data-tab="frequencies" id="tab-btn-frequencies">
+        <i class="fa-solid fa-chart-column"></i> Term Frequencies & Bigrams
+      </button>
+      <button class="tab-btn" data-tab="network" id="tab-btn-network">
+        <i class="fa-solid fa-circle-nodes"></i> Co-occurrence & PMI Graph
+      </button>
+      <button class="tab-btn" data-tab="sentiment" id="tab-btn-sentiment">
+        <i class="fa-solid fa-face-smile"></i> Sentiment & Topics
+      </button>
+      <button class="tab-btn" data-tab="geomap" id="tab-btn-geomap">
+        <i class="fa-solid fa-earth-americas"></i> Geolocation Map
+      </button>
+      <button class="tab-btn" data-tab="explorer" id="tab-btn-explorer">
+        <i class="fa-solid fa-list-ul"></i> Tweet Stream Explorer
+      </button>
+      <button class="tab-btn" data-tab="sandbox" id="tab-btn-sandbox">
+        <i class="fa-solid fa-flask-vial"></i> NLP Tokenizer Sandbox
+      </button>
+    </nav>
+
+    <!-- TAB 1: Term Frequencies & Bigrams -->
+    <section id="tab-frequencies" class="tab-pane active">
+      <div class="grid-2col">
+        <!-- Top Terms Chart -->
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <h2><i class="fa-solid fa-arrow-down-wide-short"></i> Top 15 Term Frequencies (Unigrams)</h2>
+              <p class="panel-desc">Processed with stopword removal & custom Twitter regex normalization</p>
+            </div>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="chart-terms"></canvas>
+          </div>
+        </div>
+
+        <!-- Top Bigrams Chart -->
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <h2><i class="fa-solid fa-layer-group"></i> Top 12 Word Pairs (Bigrams)</h2>
+              <p class="panel-desc">Consecutive word occurrences identifying recurring phrases</p>
+            </div>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="chart-bigrams"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Entities & Hashtags Row -->
+      <div class="grid-3col">
+        <div class="panel">
+          <div class="panel-header">
+            <h3><i class="fa-solid fa-hashtag text-purple"></i> Top Hashtags</h3>
+          </div>
+          <div class="tag-cloud" id="list-hashtags"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <h3><i class="fa-solid fa-at text-blue"></i> Top User @Mentions</h3>
+          </div>
+          <div class="tag-cloud" id="list-mentions"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <h3><i class="fa-solid fa-face-laugh-beam text-amber"></i> Top Emoticons & Emojis</h3>
+          </div>
+          <div class="tag-cloud" id="list-emoticons"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: Co-occurrence & PMI Network -->
+    <section id="tab-network" class="tab-pane">
+      <div class="grid-network">
+        <!-- Vis.js Graph Canvas -->
+        <div class="panel network-panel">
+          <div class="panel-header">
+            <div>
+              <h2><i class="fa-solid fa-circle-nodes"></i> Term Co-occurrence Network Graph</h2>
+              <p class="panel-desc">Interactive physics graph connecting words appearing together in the same tweets</p>
+            </div>
+            <div class="graph-controls">
+              <span class="control-label">Density:</span>
+              <select id="select-graph-limit" class="select-input">
+                <option value="15">Top 15 Terms</option>
+                <option value="25" selected>Top 25 Terms</option>
+                <option value="40">Top 40 Terms</option>
+              </select>
+            </div>
+          </div>
+          <div id="network-container"></div>
+          <div class="network-legend">
+            <span><i class="fa-solid fa-circle" style="color: #6366f1;"></i> Node = Term</span>
+            <span><i class="fa-solid fa-minus" style="color: #38bdf8;"></i> Edge Width = Co-occurrence Frequency</span>
+            <span><i class="fa-solid fa-hand-pointer"></i> Drag nodes or zoom to explore</span>
+          </div>
+        </div>
+
+        <!-- Pointwise Mutual Information (PMI) Calculator -->
+        <div class="panel pmi-panel">
+          <div class="panel-header">
+            <div>
+              <h3><i class="fa-solid fa-calculator text-cyan"></i> PMI Association Explorer</h3>
+              <p class="panel-desc">Calculate Pointwise Mutual Information for strong term correlations</p>
+            </div>
+          </div>
+          
+          <div class="pmi-search-box">
+            <input type="text" id="input-pmi-term" placeholder="Enter term (e.g. python, ai, data)..." class="text-input">
+            <button id="btn-compute-pmi" class="btn btn-primary"><i class="fa-solid fa-magnifying-glass"></i> Calculate</button>
+          </div>
+
+          <div class="pmi-results-box" id="pmi-results">
+            <div class="empty-state">
+              <i class="fa-solid fa-lightbulb"></i>
+              <p>Type a term above or click a node in the graph to see its highest PMI semantic associations.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: Sentiment & Topics -->
+    <section id="tab-sentiment" class="tab-pane">
+      <div class="grid-2col">
+        <div class="panel">
+          <div class="panel-header">
+            <h2><i class="fa-solid fa-chart-pie"></i> Tweet Sentiment Polarity Distribution</h2>
+            <p class="panel-desc">Classified via Bonzanini rule-based lexicon with emoticon & negation weighting</p>
+          </div>
+          <div class="chart-wrapper doughnut-wrapper">
+            <canvas id="chart-sentiment"></canvas>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <h2><i class="fa-solid fa-tags"></i> Topic Category Breakdown</h2>
+            <p class="panel-desc">Semantic clustering across tech, AI, business, science, sports</p>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="chart-topics"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Temporal Distribution -->
+      <div class="panel">
+        <div class="panel-header">
+          <h2><i class="fa-solid fa-chart-line"></i> Ingested Tweet Velocity Over Time</h2>
+          <p class="panel-desc">Time-series distribution of social media volume</p>
+        </div>
+        <div class="chart-wrapper time-wrapper">
+          <canvas id="chart-timeline"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: Geolocation Map -->
+    <section id="tab-geomap" class="tab-pane">
+      <div class="panel map-panel">
+        <div class="panel-header">
+          <div>
+            <h2><i class="fa-solid fa-earth-americas"></i> Global Geolocated Tweets Map</h2>
+            <p class="panel-desc">Geotagged tweet clusters plotted on interactive dark CartoDB tiles</p>
+          </div>
+          <div class="map-badges">
+            <span class="badge badge-pos"><i class="fa-solid fa-circle"></i> Positive</span>
+            <span class="badge badge-neu"><i class="fa-solid fa-circle"></i> Neutral</span>
+            <span class="badge badge-neg"><i class="fa-solid fa-circle"></i> Negative</span>
+          </div>
+        </div>
+        <div id="map-container"></div>
+      </div>
+    </section>
+
+    <!-- TAB 5: Tweet Explorer -->
+    <section id="tab-explorer" class="tab-pane">
+      <div class="panel">
+        <div class="panel-header explorer-header">
+          <div>
+            <h2><i class="fa-solid fa-list-ul"></i> Tweet Stream Inspector</h2>
+            <p class="panel-desc">Search, filter, and inspect ingested tweets and NLP metadata</p>
+          </div>
+          
+          <div class="filter-controls">
+            <div class="search-input-wrap">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="filter-search" placeholder="Search text or user...">
+            </div>
+
+            <select id="filter-sentiment" class="select-input">
+              <option value="">All Sentiments</option>
+              <option value="positive">Positive</option>
+              <option value="neutral">Neutral</option>
+              <option value="negative">Negative</option>
+            </select>
+
+            <select id="filter-topic" class="select-input">
+              <option value="">All Topics</option>
+              <option value="Artificial Intelligence & ML">AI & ML</option>
+              <option value="Software & Tech">Software & Tech</option>
+              <option value="Business & Markets">Business & Markets</option>
+              <option value="Science & Climate">Science & Climate</option>
+              <option value="Sports & Entertainment">Sports</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Tweet Feed List -->
+        <div class="tweet-feed" id="tweet-feed-list">
+          <div class="feed-loader"><i class="fa-solid fa-spinner fa-spin"></i> Loading tweets...</div>
+        </div>
+
+        <!-- Pagination -->
+        <div class="pagination-bar">
+          <span id="pagination-info">Showing page 1</span>
+          <div class="pagination-buttons">
+            <button id="btn-prev-page" class="btn btn-secondary btn-sm" disabled><i class="fa-solid fa-chevron-left"></i> Prev</button>
+            <button id="btn-next-page" class="btn btn-secondary btn-sm">Next <i class="fa-solid fa-chevron-right"></i></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 6: NLP Tokenizer Sandbox -->
+    <section id="tab-sandbox" class="tab-pane">
+      <div class="grid-2col">
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <h2><i class="fa-solid fa-flask-vial"></i> Live Tokenizer & Entity Tester</h2>
+              <p class="panel-desc">Test Bonzanini's custom regex against any custom tweet string in real-time</p>
+            </div>
+          </div>
+          
+          <div class="sandbox-input-area">
+            <label for="sandbox-input">Enter Custom Tweet Text:</label>
+            <textarea id="sandbox-input" rows="4" class="text-area">RT @py_dev: Testing our new NLP #Python pipeline with @tweepy! It handles URLs https://example.org and emoticons :D &amp; emojis 🚀🔥 #DataScience</textarea>
+            
+            <div class="preset-buttons">
+              <span class="preset-label">Quick Presets:</span>
+              <button class="btn-preset" data-text="Breaking: Quantum computing benchmark shattered! Incredible breakthrough in #Science &amp; #Tech 🚀 @nasa :)">Science Preset</button>
+              <button class="btn-preset" data-text="Critical production bug in cloud API. Super frustrating crash during peak traffic :( #DevOps #Bug">Bug Preset</button>
+              <button class="btn-preset" data-text="RT @user: Just published my tutorial on Mining Twitter Data with Python! Check https://marcobonzanini.com #NLP">Tutorial Preset</button>
+            </div>
+
+            <button id="btn-run-sandbox" class="btn btn-primary btn-block">
+              <i class="fa-solid fa-play"></i> Run Tokenizer & NLP Pipeline
+            </button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <h3><i class="fa-solid fa-microchip text-indigo"></i> Real-time NLP Analysis Output</h3>
+          </div>
+
+          <div class="sandbox-output" id="sandbox-output">
+            <div class="output-group">
+              <h4>Extracted Entities</h4>
+              <div class="entities-grid" id="out-entities">
+                <!-- Badges populated by JS -->
+              </div>
+            </div>
+
+            <div class="output-group">
+              <h4>Sentiment & Topic Classification</h4>
+              <div class="sentiment-badge-row" id="out-sentiment-info">
+                <!-- Polarity badges -->
+              </div>
+            </div>
+
+            <div class="output-group">
+              <h4>Custom Regex Tokens (Preserving Handles &amp; Emoticons)</h4>
+              <div class="tokens-list" id="out-raw-tokens"></div>
+            </div>
+
+            <div class="output-group">
+              <h4>Normalized &amp; Cleaned Preprocessed Tokens (Stopwords Removed)</h4>
+              <div class="tokens-list cleaned" id="out-clean-tokens"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Ingest Modal Dialog -->
+  <div class="modal-overlay" id="modal-ingest">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-bolt text-primary"></i> Ingest Twitter / X Data</h3>
+        <button class="modal-close" id="btn-close-modal"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-info">
+          Collect live tweets using your Twitter API v2 credentials (if configured in <code>.env</code>) or generate fresh realistic multi-topic synthetic stream batches instantly.
+        </p>
+
+        <div class="form-group">
+          <label>Data Collection Mode:</label>
+          <div class="radio-cards">
+            <label class="radio-card active">
+              <input type="radio" name="ingest-mode" value="auto" checked>
+              <div>
+                <strong>Auto / Live API v2</strong>
+                <p>Attempts Twitter API v2, falls back to simulated generator if no credentials found.</p>
+              </div>
+            </label>
+            <label class="radio-card">
+              <input type="radio" name="ingest-mode" value="generate">
+              <div>
+                <strong>Realistic Stream Generator</strong>
+                <p>Generates high-quality geotagged tweets across AI, Tech, Science, Business, and Sports.</p>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="input-ingest-query">Twitter Search Query (API mode):</label>
+          <input type="text" id="input-ingest-query" class="text-input" value="#python -is:retweet lang:en">
+        </div>
+
+        <div class="form-group">
+          <label for="input-ingest-count">Batch Size (Number of Tweets):</label>
+          <input type="number" id="input-ingest-count" class="text-input" min="10" max="250" value="60">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-cancel-modal">Cancel</button>
+        <button class="btn btn-primary" id="btn-execute-ingest">
+          <i class="fa-solid fa-cloud-arrow-down"></i> Start Ingestion
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast"></div>
+
+  <!-- App Logic -->
+  <script src="/static/app.js"></script>
+</body>
+</html>
