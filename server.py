@@ -21,6 +21,8 @@ from src.analyzer import TwitterAnalyzer
 from src.sentiment import TwitterSentimentAnalyzer
 from src.mock_generator import save_mock_dataset
 
+from flask import Flask, render_template, jsonify, request, send_from_directory
+
 BASE_DIR = Path(__file__).resolve().parent
 app = Flask(
     __name__,
@@ -35,9 +37,16 @@ sentiment_engine = TwitterSentimentAnalyzer(tokenizer)
 collector = TwitterCollector()
 
 @app.route("/")
+@app.route("/api/index")
+@app.route("/api/index.py")
 def index():
     """Renders the main interactive dashboard."""
     return render_template("index.html")
+
+@app.route("/static/<path:filename>")
+def custom_static(filename):
+    """Explicit static handler for serverless compatibility."""
+    return send_from_directory(str(BASE_DIR / "static"), filename)
 
 @app.route("/api/stats", methods=["GET"])
 def get_stats():
